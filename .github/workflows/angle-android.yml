@@ -20,10 +20,14 @@ jobs:
         uses: actions/checkout@v5
         with:
           path: 'angle'
+          
+      - name: Install ccache
+        uses: hendrikmuhs/ccache-action@v1.2
 
       - name: Build ANGLE
         shell: bash
         run: |
+          export PATH="/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH"
           git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
           export PATH=`pwd`/depot_tools:$PATH
           echo $PATH
@@ -31,11 +35,51 @@ jobs:
           cd angle
           python3 scripts/bootstrap.py
           echo "Created gclient, syncing repo now"
-          gclient sync
+          gclient --no-history sync
           echo "Generating build files"
-          gn gen out/Android-${{matrix.arch}}
+
+          mkdir -p out/Android-${{ matrix.arch }}
+          
+          echo "target_os = \"android\"
+          target_cpu = \"${{ matrix.arch }}\"
+          is_component_build = false
+          is_debug = false
+          angle_assert_always_on = false
+          is_clang = true
+          proprietary_codecs = true
+          dcheck_always_on = false
+          cc_wrapper=\"env CCACHE_SLOPPINESS=time_macros ccache\"
+          android32_ndk_api_level = 30
+          android64_ndk_api_level = 30
+          symbol_level = 0
+          strip_debug_info = true
+          generate_debug_info = false
+          enable_resource_allowlist_generation = false
+          use_thin_lto = true
+          angle_enable_vulkan = true
+          angle_enable_vulkan_validation_layers = false
+          angle_enable_essl = true
+          angle_enable_glsl = true
+          angle_enable_hlsl = false
+          angle_enable_gl = false
+          angle_enable_d3d9 = false
+          angle_enable_d3d11 = false
+          angle_enable_null = false
+          angle_enable_metal = false
+          angle_enable_swiftshader = false
+          angle_expose_non_conformant_extensions_and_versions = true
+          build_angle_deqp_tests = false
+          arm_use_neon = true
+          arm_version = 8
+          angle_enable_vulkan_shared_ring_buffer_cmd_alloc = true
+          angle_build_tests = false
+          arm_float_abi = \"hard\"
+          arm_fpu = \"neon\"
+          " > out/Android-${{ matrix.arch }}/args.gn
+          
+          gn gen out/Android-${{matrix.arch}} --threads=$(nproc)
           echo "Building!"
-          autoninja -C out/Android-${{matrix.arch}}
+          autoninja -j$(nproc) -C out/Android-${{matrix.arch}}
 
       - name: Upload ANGLE
         uses: actions/upload-artifact@v4
